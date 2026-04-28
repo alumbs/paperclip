@@ -28,14 +28,6 @@ import {
 } from "@paperclipai/adapter-cursor-local/server";
 import { agentConfigurationDoc as cursorAgentConfigurationDoc, models as cursorModels } from "@paperclipai/adapter-cursor-local";
 import {
-  execute as windsurfExecute,
-  listWindsurfSkills,
-  syncWindsurfSkills,
-  testEnvironment as windsurfTestEnvironment,
-  sessionCodec as windsurfSessionCodec,
-} from "@paperclipai/adapter-windsurf-local/server";
-import { agentConfigurationDoc as windsurfAgentConfigurationDoc, models as windsurfModels } from "@paperclipai/adapter-windsurf-local";
-import {
   execute as geminiExecute,
   listGeminiSkills,
   syncGeminiSkills,
@@ -177,22 +169,6 @@ const cursorLocalAdapter: ServerAdapterModule = {
   instructionsPathKey: "instructionsFilePath",
   requiresMaterializedRuntimeSkills: true,
   agentConfigurationDoc: cursorAgentConfigurationDoc,
-};
-
-const windsurfLocalAdapter: ServerAdapterModule = {
-  type: "windsurf",
-  execute: windsurfExecute,
-  testEnvironment: windsurfTestEnvironment,
-  listSkills: listWindsurfSkills,
-  syncSkills: syncWindsurfSkills,
-  sessionCodec: windsurfSessionCodec,
-  sessionManagement: getAdapterSessionManagement("windsurf") ?? undefined,
-  models: windsurfModels,
-  supportsLocalAgentJwt: true,
-  supportsInstructionsBundle: true,
-  instructionsPathKey: "instructionsFilePath",
-  requiresMaterializedRuntimeSkills: true,
-  agentConfigurationDoc: windsurfAgentConfigurationDoc,
 };
 
 const geminiLocalAdapter: ServerAdapterModule = {
@@ -340,7 +316,6 @@ function registerBuiltInAdapters() {
     openCodeLocalAdapter,
     piLocalAdapter,
     cursorLocalAdapter,
-    windsurfLocalAdapter,
     geminiLocalAdapter,
     openclawGatewayAdapter,
     hermesLocalAdapter,
