@@ -2,6 +2,7 @@ import type { UIAdapterModule } from "./types";
 import { claudeLocalUIAdapter } from "./claude-local";
 import { codexLocalUIAdapter } from "./codex-local";
 import { cursorLocalUIAdapter } from "./cursor";
+import { windsurfLocalUIAdapter } from "./windsurf";
 import { geminiLocalUIAdapter } from "./gemini-local";
 import { openCodeLocalUIAdapter } from "./opencode-local";
 import { piLocalUIAdapter } from "./pi-local";
@@ -56,6 +57,7 @@ function registerBuiltInUIAdapters() {
     openCodeLocalUIAdapter,
     piLocalUIAdapter,
     cursorLocalUIAdapter,
+    windsurfLocalUIAdapter,
     openClawGatewayUIAdapter,
     processUIAdapter,
     httpUIAdapter,
