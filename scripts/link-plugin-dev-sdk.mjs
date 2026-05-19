@@ -20,7 +20,7 @@ mkdirSync(scopeDir, { recursive: true });
 try {
   const stat = lstatSync(linkTarget);
   if (stat.isSymbolicLink()) {
-    rmSync(linkTarget, { force: true });
+    rmSync(linkTarget, { force: true, recursive: true });
   } else {
     console.log("  i Keeping existing installed @paperclipai/plugin-sdk directory in place");
     process.exit(0);
@@ -30,6 +30,15 @@ try {
 }
 
 const relativeSdkDir = relative(scopeDir, sdkDir);
-symlinkSync(relativeSdkDir, linkTarget, "dir");
+try {
+  symlinkSync(relativeSdkDir, linkTarget, "dir");
+} catch (err) {
+  if (err && err.code === "EEXIST") {
+    rmSync(linkTarget, { force: true, recursive: true });
+    symlinkSync(relativeSdkDir, linkTarget, "dir");
+  } else {
+    throw err;
+  }
+}
 
 console.log(`  ✓ Linked local @paperclipai/plugin-sdk for ${packageDir}`);
