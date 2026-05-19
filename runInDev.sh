@@ -60,6 +60,23 @@ if [[ "$killed_any" == false ]]; then
   echo "No stale Postgres processes found."
 fi
 
+# Also kill any orphaned embedded-postgres worker processes (forkchild io_worker, etc.)
+# These don't bind to the port but hold shared memory, causing
+# "pre-existing shared memory block is still in use" on next start.
+echo "Checking for orphaned embedded-postgres workers..."
+ORPHAN_KILL_CMD=$(cat <<'PS'
+Get-CimInstance Win32_Process -Filter "Name='postgres.exe'" |
+  Where-Object { $_.CommandLine -match 'embedded-postgres' } |
+  ForEach-Object {
+    Write-Host ("  Orphan postgres.exe PID {0} (parent {1})" -f $_.ProcessId, $_.ParentProcessId)
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+PS
+)
+if [[ "$DRY_RUN" == false ]]; then
+  powershell -NoProfile -Command "$ORPHAN_KILL_CMD" 2>/dev/null || true
+fi
+
 if [[ "$DRY_RUN" == true ]]; then
   echo "Dry run — re-run without --dry to kill and start dev."
   exit 0
