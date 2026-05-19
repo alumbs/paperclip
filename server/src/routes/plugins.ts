@@ -120,7 +120,7 @@ interface AvailablePluginExample {
   displayName: string;
   description: string;
   localPath: string;
-  tag: "example";
+  tag: "example" | "first-party";
 }
 
 /** Response body for GET /api/plugins/:pluginId/health */
@@ -152,6 +152,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 
 const BUNDLED_PLUGIN_EXAMPLES: AvailablePluginExample[] = [
+  {
+    packageName: "@paperclipai/plugin-workspace-diff",
+    pluginKey: "paperclip.workspace-diff",
+    displayName: "Workspace Changes",
+    description: "First-party workspace Changes tab backed by plugin-local Git diff computation.",
+    localPath: "packages/plugins/plugin-workspace-diff",
+    tag: "first-party",
+  },
   {
     packageName: "@paperclipai/plugin-hello-world-example",
     pluginKey: "paperclip.hello-world-example",
@@ -199,9 +207,9 @@ function listBundledPluginExamples(): AvailablePluginExample[] {
  *
  * Lookup order:
  * - UUID-like IDs: getById first, then getByKey.
- * - Scoped package keys (e.g. "@scope/name"): getByKey only, never getById.
- * - Other non-UUID IDs: try getById first (test/memory registries may allow this),
- *   then fallback to getByKey. Any UUID parse error from getById is ignored.
+ * - All non-UUID values: getByKey only, never getById. The persisted plugin
+ *   ID column is a PostgreSQL UUID, so probing it with keys such as
+ *   "acme.plugin" raises a database cast error before a key lookup can happen.
  *
  * @param registry - The plugin registry service instance
  * @param pluginId - Either a database UUID or plugin key (manifest id)
@@ -212,27 +220,13 @@ async function resolvePlugin(
   pluginId: string,
 ) {
   const isUuid = UUID_REGEX.test(pluginId);
-  const isScopedPackageKey = pluginId.startsWith("@") || pluginId.includes("/");
 
-  // Scoped package IDs are valid plugin keys but invalid UUIDs.
-  // Skip getById() entirely to avoid Postgres uuid parse errors.
-  if (isScopedPackageKey && !isUuid) {
+  if (!isUuid) {
     return registry.getByKey(pluginId);
   }
 
-  try {
-    const byId = await registry.getById(pluginId);
-    if (byId) return byId;
-  } catch (error) {
-    const maybeCode =
-      typeof error === "object" && error !== null && "code" in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    // Ignore invalid UUID cast errors and continue with key lookup.
-    if (maybeCode !== "22P02") {
-      throw error;
-    }
-  }
+  const byId = await registry.getById(pluginId);
+  if (byId) return byId;
 
   return registry.getByKey(pluginId);
 }
