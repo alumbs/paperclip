@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -586,6 +587,10 @@ describeEmbeddedPostgres("plugin database namespaces", () => {
       pluginId,
       expect.objectContaining({
         databaseNamespace: namespace,
+        execArgv: [
+          "--import",
+          expect.stringMatching(/^file:\/\//),
+        ],
         env: {
           PAPERCLIP_DEPLOYMENT_MODE: "authenticated",
           PAPERCLIP_DEPLOYMENT_EXPOSURE: "public",
@@ -594,6 +599,9 @@ describeEmbeddedPostgres("plugin database namespaces", () => {
           database: expect.objectContaining({ coreReadTables: ["companies"] }),
         }),
       }),
+    );
+    expect(workerManager.startWorker.mock.calls[0]?.[1]?.execArgv?.[1]).toBe(
+      pathToFileURL(path.resolve("cli/node_modules/tsx/dist/loader.mjs")).href,
     );
     const [plugin] = await db
       .select()
