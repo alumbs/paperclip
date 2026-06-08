@@ -816,6 +816,32 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     return row ?? null;
   }
 
+  async function latestDismissedFalsePositiveDecision(
+    companyId: string,
+    runId: string,
+    evidenceAfter: Date | null,
+  ) {
+    const predicates = [
+      eq(heartbeatRunWatchdogDecisions.companyId, companyId),
+      eq(heartbeatRunWatchdogDecisions.runId, runId),
+      eq(heartbeatRunWatchdogDecisions.decision, "dismissed_false_positive"),
+    ];
+    if (evidenceAfter) {
+      predicates.push(gte(heartbeatRunWatchdogDecisions.createdAt, evidenceAfter));
+    }
+    const [row] = await db
+      .select({
+        id: heartbeatRunWatchdogDecisions.id,
+        createdAt: heartbeatRunWatchdogDecisions.createdAt,
+        evaluationIssueId: heartbeatRunWatchdogDecisions.evaluationIssueId,
+      })
+      .from(heartbeatRunWatchdogDecisions)
+      .where(and(...predicates))
+      .orderBy(desc(heartbeatRunWatchdogDecisions.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
   async function findOpenStaleRunEvaluation(companyId: string, runId: string) {
     const [row] = await db
       .select({
@@ -1472,6 +1498,31 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       return { kind: "skipped" as const };
     }
     const silenceStartedAt = silenceStartedAtForRun(input.run);
+    const dismissedFalsePositive = await latestDismissedFalsePositiveDecision(
+      input.run.companyId,
+      input.run.id,
+      silenceStartedAt,
+    );
+    if (dismissedFalsePositive) {
+      await logActivity(db, {
+        companyId: input.run.companyId,
+        actorType: "system",
+        actorId: "system",
+        agentId: input.run.agentId,
+        runId: input.run.id,
+        action: "heartbeat.output_stale_false_positive_suppressed",
+        entityType: "heartbeat_run",
+        entityId: input.run.id,
+        details: {
+          source: "recovery.scan_silent_active_runs",
+          watchdogDecisionId: dismissedFalsePositive.id,
+          evaluationIssueId: dismissedFalsePositive.evaluationIssueId,
+          dismissedAt: dismissedFalsePositive.createdAt.toISOString(),
+          silenceStartedAt: silenceStartedAt?.toISOString() ?? null,
+        },
+      });
+      return { kind: "skipped" as const };
+    }
     if (sourceIssue && isTerminalIssueStatus(sourceIssue.status)) {
       const terminalEvidence = await latestSameRunSourceTerminalEvidence({
         run: input.run,
@@ -1703,6 +1754,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     }
 
     const boardActor = input.actor.type === "board";
+    const allowTerminalEvaluationDecision = input.decision === "dismissed_false_positive";
     const assignedRecoveryOwner =
       input.actor.type === "agent" &&
       Boolean(input.actor.agentId) &&
@@ -1710,7 +1762,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       evaluationIssue.originKind === STALE_ACTIVE_RUN_EVALUATION_ORIGIN_KIND &&
       evaluationIssue.originId === run.id &&
       evaluationIssue.hiddenAt === null &&
-      !["done", "cancelled"].includes(evaluationIssue.status) &&
+      (allowTerminalEvaluationDecision || !["done", "cancelled"].includes(evaluationIssue.status)) &&
       evaluationIssue?.assigneeAgentId === input.actor.agentId;
     if (!boardActor && !assignedRecoveryOwner) {
       throw forbidden("Only the board or the assigned recovery owner can record watchdog decisions");

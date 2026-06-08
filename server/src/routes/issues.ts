@@ -103,6 +103,8 @@ import { executionWorkspaceService as executionWorkspaceServiceDirect } from "..
 import { feedbackService } from "../services/feedback.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { readAcceptedPlanConfirmationTarget } from "../services/issues.js";
+import { RECOVERY_ORIGIN_KINDS } from "../services/recovery/origins.js";
+import { recoveryService } from "../services/recovery/service.js";
 import { environmentService } from "../services/environments.js";
 import { redactSensitiveText } from "../redaction.js";
 import {
@@ -903,6 +905,7 @@ export function issueRoutes(
   const heartbeat = heartbeatService(db, {
     pluginWorkerManager: opts.pluginWorkerManager,
   });
+  const recovery = recoveryService(db, { enqueueWakeup: heartbeat.wakeup });
   const feedback = feedbackService(db);
   const companiesSvc = companyService(db);
   let searchSvc = opts.searchService ?? null;
@@ -4367,6 +4370,33 @@ export function issueRoutes(
     if (!issue) {
       res.status(404).json({ error: "Issue not found" });
       return;
+    }
+
+    if (
+      existing.originKind === RECOVERY_ORIGIN_KINDS.staleActiveRunEvaluation &&
+      !["done", "cancelled"].includes(existing.status) &&
+      issue.status === "done" &&
+      typeof existing.originId === "string" &&
+      existing.originId.length > 0
+    ) {
+      const watchdogActor = req.actor.type === "agent"
+        ? { type: "agent" as const, agentId: actor.agentId, runId: actor.runId }
+        : { type: "board" as const, userId: actor.actorId, runId: actor.runId };
+      try {
+        await recovery.recordWatchdogDecision({
+          runId: existing.originId,
+          actor: watchdogActor,
+          decision: "dismissed_false_positive",
+          evaluationIssueId: issue.id,
+          reason: "Stale-run evaluation was closed as done through the issue update route.",
+          createdByRunId: actor.runId ?? null,
+        });
+      } catch (err) {
+        logger.warn(
+          { err, issueId: issue.id, runId: existing.originId },
+          "failed to persist stale-run false-positive watchdog decision during issue closure",
+        );
+      }
     }
 
     let cancelledStatusRunId: string | null = null;

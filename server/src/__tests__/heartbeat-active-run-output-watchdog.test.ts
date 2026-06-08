@@ -605,6 +605,49 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
     });
   });
 
+  it("suppresses future duplicate evaluations after the recovery owner closes one as a false positive", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const { companyId, managerId, runId } = await seedRunningRun({
+      now,
+      ageMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS + 60_000,
+    });
+    const heartbeat = heartbeatService(db);
+    const recovery = recoveryService(db, { enqueueWakeup: vi.fn() });
+
+    const firstScan = await heartbeat.scanSilentActiveRuns({ now, companyId });
+    const evaluationIssueId = firstScan.evaluationIssueIds[0];
+    expect(evaluationIssueId).toBeTruthy();
+
+    await db.update(issues).set({ status: "done" }).where(eq(issues.id, evaluationIssueId!));
+
+    await expect(
+      recovery.recordWatchdogDecision({
+        runId,
+        actor: { type: "agent", agentId: managerId },
+        decision: "dismissed_false_positive",
+        evaluationIssueId,
+        reason: "Recovered run already handled elsewhere.",
+      }),
+    ).resolves.toMatchObject({
+      runId,
+      evaluationIssueId,
+      decision: "dismissed_false_positive",
+      createdByAgentId: managerId,
+    });
+
+    const secondScan = await heartbeat.scanSilentActiveRuns({
+      now: new Date(now.getTime() + 5 * 60_000),
+      companyId,
+    });
+    expect(secondScan).toMatchObject({ created: 0, skipped: 1 });
+
+    const evaluations = await db
+      .select()
+      .from(issues)
+      .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "stale_active_run_evaluation")));
+    expect(evaluations).toHaveLength(1);
+  });
+
   it("re-arms continue decisions after the default quiet window", async () => {
     const now = new Date("2026-04-22T20:00:00.000Z");
     const { companyId, managerId, runId } = await seedRunningRun({

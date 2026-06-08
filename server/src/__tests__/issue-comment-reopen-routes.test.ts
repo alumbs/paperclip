@@ -75,6 +75,9 @@ const mockIssueRecoveryActionService = vi.hoisted(() => ({
 const mockIssueTreeControlService = vi.hoisted(() => ({
   getActivePauseHoldGate: vi.fn(async () => null),
 }));
+const mockRecoveryService = vi.hoisted(() => ({
+  recordWatchdogDecision: vi.fn(async () => undefined),
+}));
 
 vi.mock("@paperclipai/shared/telemetry", () => ({
   trackAgentTaskCompleted: vi.fn(),
@@ -111,6 +114,10 @@ vi.mock("../services/instance-settings.js", () => ({
 
 vi.mock("../services/issues.js", () => ({
   issueService: () => mockIssueService,
+}));
+
+vi.mock("../services/recovery/service.js", () => ({
+  recoveryService: () => mockRecoveryService,
 }));
 
 vi.mock("../services/routines.js", () => ({
@@ -249,6 +256,7 @@ describe.sequential("issue comment reopen routes", () => {
     mockRoutineService.syncRunStatusForIssue.mockReset();
     mockIssueRecoveryActionService.getActiveForIssue.mockReset();
     mockIssueTreeControlService.getActivePauseHoldGate.mockReset();
+    mockRecoveryService.recordWatchdogDecision.mockReset();
     mockTxInsertValues.mockReset();
     mockTxInsert.mockReset();
     mockDbSelect.mockReset();
@@ -286,6 +294,7 @@ describe.sequential("issue comment reopen routes", () => {
     mockRoutineService.syncRunStatusForIssue.mockResolvedValue(undefined);
     mockIssueRecoveryActionService.getActiveForIssue.mockResolvedValue(null);
     mockIssueTreeControlService.getActivePauseHoldGate.mockResolvedValue(null);
+    mockRecoveryService.recordWatchdogDecision.mockResolvedValue(undefined);
     mockIssueService.addComment.mockResolvedValue({
       id: "comment-1",
       issueId: "11111111-1111-4111-8111-111111111111",
@@ -1350,6 +1359,33 @@ describe.sequential("issue comment reopen routes", () => {
 
     expect(res.status).toBe(200);
     expect(mockHeartbeatService.cancelRun).not.toHaveBeenCalled();
+  });
+
+  it("records a false-positive watchdog decision when a stale-run evaluation is closed as done", async () => {
+    const issue = {
+      ...makeIssue("todo"),
+      originKind: "stale_active_run_evaluation",
+      originId: "run-1",
+    };
+    mockIssueService.getById.mockResolvedValue(issue);
+    mockIssueService.update.mockImplementation(async (_id: string, patch: Record<string, unknown>) => ({
+      ...issue,
+      ...patch,
+    }));
+
+    const res = await request(await installActor(createApp(), agentActor()))
+      .patch("/api/issues/11111111-1111-4111-8111-111111111111")
+      .send({ status: "done" });
+
+    expect(res.status).toBe(200);
+    expect(mockRecoveryService.recordWatchdogDecision).toHaveBeenCalledWith({
+      runId: "run-1",
+      actor: { type: "agent", agentId: "22222222-2222-4222-8222-222222222222", runId: "run-1" },
+      decision: "dismissed_false_positive",
+      evaluationIssueId: "11111111-1111-4111-8111-111111111111",
+      reason: "Stale-run evaluation was closed as done through the issue update route.",
+      createdByRunId: "run-1",
+    });
   });
 
   it("writes decision ids into executionState and inserts the decision inside the transaction", async () => {
