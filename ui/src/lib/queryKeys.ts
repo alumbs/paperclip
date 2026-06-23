@@ -139,6 +139,13 @@ export const queryKeys = {
     list: (companyId: string) => ["projects", companyId] as const,
     detail: (id: string) => ["projects", "detail", id] as const,
   },
+  externalObjects: {
+    byIssue: (issueId: string) => ["external-objects", "by-issue", issueId] as const,
+    issueSummary: (issueId: string) => ["external-objects", "issue-summary", issueId] as const,
+    issueSummaries: (companyId: string, issueIds: readonly string[]) =>
+      ["external-objects", "issue-summaries", companyId, issueIds] as const,
+    projectSummary: (projectId: string) => ["external-objects", "project-summary", projectId] as const,
+  },
   goals: {
     list: (companyId: string) => ["goals", companyId] as const,
     detail: (id: string) => ["goals", "detail", id] as const,
@@ -194,6 +201,7 @@ export const queryKeys = {
     mine: (companyId: string) => ["resource-memberships", companyId, "me"] as const,
   },
   instance: {
+    settings: ["instance", "settings"] as const,
     generalSettings: ["instance", "general-settings"] as const,
     schedulerHeartbeats: ["instance", "scheduler-heartbeats"] as const,
     experimentalSettings: ["instance", "experimental-settings"] as const,

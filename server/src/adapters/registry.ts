@@ -5,6 +5,7 @@ import type {
   ServerAdapterModule,
 } from "./types.js";
 import { parseAdapterModelsEnv } from "../services/adapter-models-env.js";
+import { stampClaudeAgentIdHeader } from "./claude-agent-id-header.js";
 import {
   buildSandboxNpmInstallCommand,
   getAdapterSessionManagement,
@@ -267,7 +268,7 @@ async function listAcpxModels(): Promise<AdapterModel[]> {
 
 const claudeLocalAdapter: ServerAdapterModule = {
   type: "claude_local",
-  execute: claudeExecute,
+  execute: stampClaudeAgentIdHeader(claudeExecute),
   testEnvironment: claudeTestEnvironment,
   listSkills: listClaudeSkills,
   syncSkills: syncClaudeSkills,
@@ -456,6 +457,10 @@ const piLocalAdapter: ServerAdapterModule = {
 // hermes-paperclip-adapter v0.2.0 predates the authToken field; cast is
 // intentional until hermes ships a matching AdapterExecutionContext type.
 const executeHermesLocal = hermesExecute as unknown as ServerAdapterModule["execute"];
+// hermes-paperclip-adapter v0.2.0 still depends on the published @paperclipai/adapter-utils
+// that ships the "paperclip_required" origin; casts bridge until hermes upgrades.
+const listHermesSkills = hermesListSkills as unknown as ServerAdapterModule["listSkills"];
+const syncHermesSkills = hermesSyncSkills as unknown as ServerAdapterModule["syncSkills"];
 
 const hermesLocalAdapter: ServerAdapterModule = {
   type: "hermes_local",
@@ -510,8 +515,8 @@ const hermesLocalAdapter: ServerAdapterModule = {
   },
   testEnvironment: (ctx) => hermesTestEnvironment(normalizeHermesConfig(ctx) as never),
   sessionCodec: hermesSessionCodec,
-  listSkills: hermesListSkills,
-  syncSkills: hermesSyncSkills,
+  listSkills: listHermesSkills,
+  syncSkills: syncHermesSkills,
   models: hermesModels,
   supportsLocalAgentJwt: true,
   supportsInstructionsBundle: false,

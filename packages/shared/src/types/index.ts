@@ -265,6 +265,14 @@ export type {
   CompanyArtifactSource,
   CompanyArtifactsResponse,
 } from "./artifact.js";
+
+export type {
+  ExternalObject,
+  ExternalObjectMention,
+  ExternalObjectMentionGroup,
+  ExternalObjectSummary,
+  ExternalObjectSummaryItem,
+} from "./external-object.js";
 export type {
   Issue,
   IssueWorkMode,
@@ -357,6 +365,9 @@ export type {
   IssueAncestorGoal,
   IssueAttachment,
   IssueLabel,
+  IssueWatchdog,
+  IssueWatchdogStatus,
+  IssueWatchdogSummary,
 } from "./issue.js";
 export type {
   IssueTreeControlPreview,
@@ -548,6 +559,8 @@ export type {
   PluginDatabaseDeclaration,
   PluginApiRouteCompanyResolution,
   PluginApiRouteDeclaration,
+  PluginObjectReferenceRefreshPolicy,
+  PluginObjectReferenceProviderDeclaration,
   PaperclipPluginManifestV1,
   PluginRecord,
   PluginDatabaseNamespaceRecord,
